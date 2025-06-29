@@ -1,0 +1,22 @@
+# Django Configuration
+SECRET_KEY=your-secret-key-here-change-this-in-production
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1
+
+# MinIO Configuration
+MINIO_ENDPOINT=localhost:9000
+MINIO_ACCESS_KEY=admin
+MINIO_SECRET_KEY=password123
+MINIO_BUCKET_NAME=law-cases
+MINIO_SECURE=False
+
+# Database Configuration (SQLite for development)
+DATABASE_URL=sqlite:///db.sqlite3
+
+# Vector Database Configuration
+VECTOR_DB_PATH=./vector_db
+
+# Embedding Model Configuration
+EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
+CHUNK_SIZE=1000
+CHUNK_OVERLAP=200 

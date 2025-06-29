@@ -1,0 +1,266 @@
+{% extends 'base.html' %}
+
+{% block title %}Query System - Law Case RAG System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">
+                    <i class="fas fa-search me-2"></i>
+                    Query Legal Documents
+                </h4>
+            </div>
+            <div class="card-body">
+                <form id="queryForm">
+                    {% csrf_token %}
+                    
+                    <div class="mb-4">
+                        <label for="query" class="form-label">Your Legal Question</label>
+                        <textarea class="form-control" id="query" name="query" rows="4" 
+                                  placeholder="Enter your legal question or search terms here..." required></textarea>
+                        <div class="form-text">
+                            <i class="fas fa-lightbulb me-1"></i>
+                            Be specific with your questions for better results. You can ask about legal concepts, case details, or specific terms.
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="num_results" class="form-label">Number of Results</label>
+                            <select class="form-select" id="num_results" name="num_results">
+                                <option value="3">3 results</option>
+                                <option value="5" selected>5 results</option>
+                                <option value="10">10 results</option>
+                                <option value="15">15 results</option>
+                                <option value="20">20 results</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="filter_document" class="form-label">Filter by Document (Optional)</label>
+                            <select class="form-select" id="filter_document" name="filter_document">
+                                <option value="">All documents</option>
+                                {% for doc in documents %}
+                                <option value="{{ doc.id }}">{{ doc.title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                        <button type="submit" class="btn btn-success" id="queryBtn">
+                            <i class="fas fa-search me-2"></i>Search Documents
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Results Section -->
+<div class="row mt-4" id="resultsSection" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-list me-2"></i>
+                    Search Results
+                </h5>
+                <div class="text-muted">
+                    <small id="resultStats"></small>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="resultsContainer">
+                    <!-- Results will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-spinner fa-spin me-2"></i>
+                    Searching Documents
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="text-center">
+                    <div class="spinner-border text-success mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mb-0">Searching through your legal documents...</p>
+                    <small class="text-muted">This may take a few seconds.</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const queryForm = document.getElementById('queryForm');
+    const queryBtn = document.getElementById('queryBtn');
+    const resultsSection = document.getElementById('resultsSection');
+    const resultsContainer = document.getElementById('resultsContainer');
+    const resultStats = document.getElementById('resultStats');
+
+    queryForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const query = document.getElementById('query').value.trim();
+        if (!query) {
+            alert('Please enter a query.');
+            return;
+        }
+
+        // Show loading modal
+        const modal = new bootstrap.Modal(document.getElementById('loadingModal'));
+        modal.show();
+
+        // Prepare form data
+        const formData = new FormData(queryForm);
+        const filterDocument = document.getElementById('filter_document').value;
+        
+        // Prepare request data
+        const requestData = {
+            query: formData.get('query'),
+            num_results: parseInt(formData.get('num_results')),
+            filter_metadata: {}
+        };
+
+        if (filterDocument) {
+            requestData.filter_metadata.document_id = filterDocument;
+        }
+
+        // Send query
+        fetch('{% url "rag_system:query_api" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            modal.hide();
+            
+            if (data.error) {
+                // Show error
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-danger alert-dismissible fade show';
+                alert.innerHTML = `
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    ${data.error}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                document.querySelector('main').insertBefore(alert, document.querySelector('main').firstChild);
+                return;
+            }
+
+            // Display results
+            displayResults(data);
+        })
+        .catch(error => {
+            modal.hide();
+            console.error('Error:', error);
+            
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-danger alert-dismissible fade show';
+            alert.innerHTML = `
+                <i class="fas fa-exclamation-circle me-2"></i>
+                Search failed. Please try again.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.querySelector('main').insertBefore(alert, document.querySelector('main').firstChild);
+        });
+    });
+
+    function displayResults(data) {
+        const results = data.results || [];
+        
+        // Update stats
+        resultStats.textContent = `${results.length} results found in ${data.total_time?.toFixed(2) || 0}s`;
+        
+        // Clear previous results
+        resultsContainer.innerHTML = '';
+        
+        if (results.length === 0) {
+            resultsContainer.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No results found</h5>
+                    <p class="text-muted">Try adjusting your search terms or increasing the number of results.</p>
+                </div>
+            `;
+        } else {
+            // Display each result
+            results.forEach((result, index) => {
+                const resultCard = document.createElement('div');
+                resultCard.className = 'result-card card mb-3';
+                
+                const similarityScore = result.similarity_score ? (result.similarity_score * 100).toFixed(1) : 'N/A';
+                
+                resultCard.innerHTML = `
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-file-alt text-primary me-2"></i>
+                                Result ${index + 1}
+                            </h6>
+                            <span class="badge bg-success">${similarityScore}% match</span>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <p class="card-text">${result.text}</p>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <small class="text-muted">
+                                    <i class="fas fa-file me-1"></i>
+                                    <strong>Source:</strong> ${result.metadata?.document_title || 'Unknown'}
+                                </small>
+                            </div>
+                            <div class="col-md-6">
+                                <small class="text-muted">
+                                    <i class="fas fa-layer-group me-1"></i>
+                                    <strong>Chunk:</strong> ${result.metadata?.chunk_id || 'N/A'}
+                                </small>
+                            </div>
+                        </div>
+                        
+                        ${result.metadata?.page_number ? `
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-file-alt me-1"></i>
+                                <strong>Page:</strong> ${result.metadata.page_number}
+                            </small>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+                
+                resultsContainer.appendChild(resultCard);
+            });
+        }
+        
+        // Show results section
+        resultsSection.style.display = 'block';
+        
+        // Scroll to results
+        resultsSection.scrollIntoView({ behavior: 'smooth' });
+    }
+});
+</script>
+{% endblock %} 

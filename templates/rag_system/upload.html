@@ -1,0 +1,295 @@
+{% extends 'base.html' %}
+
+{% block title %}Upload Documents - Law Case RAG System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">
+                    <i class="fas fa-upload me-2"></i>
+                    Upload Legal Documents
+                </h4>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" id="uploadForm">
+                    {% csrf_token %}
+                    
+                    <div class="mb-4">
+                        <label for="title" class="form-label">Document Title (Optional)</label>
+                        <input type="text" class="form-control" id="title" name="title" placeholder="Enter a title for the document">
+                        <div class="form-text">If not provided, the filename will be used as the title.</div>
+                    </div>
+
+                    <div class="upload-area" id="uploadArea">
+                        <div class="mb-3">
+                            <i class="fas fa-cloud-upload-alt fa-3x text-muted"></i>
+                        </div>
+                        <h5>Drag & Drop PDF files here</h5>
+                        <p class="text-muted">or</p>
+                        <input type="file" class="form-control" id="file" name="file" accept=".pdf" style="display: none;" required>
+                        <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('file').click()">
+                            <i class="fas fa-folder-open me-2"></i>Choose File
+                        </button>
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Only PDF files are supported. Maximum file size: 50MB
+                            </small>
+                        </div>
+                    </div>
+
+                    <div id="fileInfo" class="mt-3" style="display: none;">
+                        <div class="alert alert-info">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-file-pdf me-2"></i>
+                                <div>
+                                    <strong id="fileName"></strong>
+                                    <br>
+                                    <small id="fileSize" class="text-muted"></small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="submit" class="btn btn-primary" id="uploadBtn">
+                            <i class="fas fa-upload me-2"></i>Upload Document
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Progress Modal -->
+<div class="modal fade" id="uploadModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-spinner fa-spin me-2"></i>
+                    Processing Document
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="text-center">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mb-0">Please wait while we process your document...</p>
+                    <small class="text-muted">This may take a few minutes for large documents.</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+console.log('🚀 Upload page JavaScript loaded');
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📄 DOM loaded, setting up upload form');
+    
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('file');
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const uploadForm = document.getElementById('uploadForm');
+    const uploadBtn = document.getElementById('uploadBtn');
+
+    console.log('🔍 Elements found:', {
+        uploadArea: !!uploadArea,
+        fileInput: !!fileInput,
+        fileInfo: !!fileInfo,
+        fileName: !!fileName,
+        fileSize: !!fileSize,
+        uploadForm: !!uploadForm,
+        uploadBtn: !!uploadBtn
+    });
+
+    // Test upload button click
+    uploadBtn.addEventListener('click', function(e) {
+        console.log('🖱️ Upload button clicked');
+        console.log('📁 Files in input:', fileInput.files.length);
+    });
+
+    // Drag and drop functionality
+    uploadArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            fileInput.files = files;
+            handleFileSelect();
+        }
+    });
+
+    // File input change
+    fileInput.addEventListener('change', function(e) {
+        console.log('📁 File input change event triggered');
+        console.log('📋 Event:', e);
+        console.log('📁 Files:', fileInput.files);
+        handleFileSelect();
+    });
+
+    function handleFileSelect() {
+        console.log('🔍 handleFileSelect called');
+        const file = fileInput.files[0];
+        console.log('📁 File object:', file);
+        
+        if (file) {
+            console.log('✅ File found:', file.name, 'Size:', file.size, 'Type:', file.type);
+            
+            // Validate file type
+            if (file.type !== 'application/pdf') {
+                console.log('❌ Invalid file type:', file.type);
+                alert('Please select a PDF file.');
+                fileInput.value = '';
+                return;
+            }
+
+            // Validate file size (50MB)
+            if (file.size > 50 * 1024 * 1024) {
+                console.log('❌ File too large:', file.size);
+                alert('File size must be less than 50MB.');
+                fileInput.value = '';
+                return;
+            }
+
+            console.log('✅ File validation passed');
+            // Show file info
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            fileInfo.style.display = 'block';
+            console.log('✅ File info displayed');
+            
+            // Monitor if file gets cleared
+            setTimeout(() => {
+                console.log('⏰ Checking file after 1 second:', fileInput.files.length, 'files');
+                if (fileInput.files.length === 0) {
+                    console.log('❌ File was cleared!');
+                } else {
+                    console.log('✅ File still present');
+                }
+            }, 1000);
+            
+        } else {
+            console.log('❌ No file found in input');
+        }
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // Form submission
+    uploadForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        alert('Form submitted! Check console for debug info.');
+        console.log('🚀 Upload form submitted');
+        
+        const file = fileInput.files[0];
+        if (!file) {
+            console.log('❌ No file selected');
+            alert('Please select a file to upload.');
+            return;
+        }
+
+        console.log('📁 File selected:', file.name, 'Size:', file.size, 'Type:', file.type);
+
+        // Show progress modal
+        const modal = new bootstrap.Modal(document.getElementById('uploadModal'));
+        modal.show();
+
+        // Submit form
+        const formData = new FormData(uploadForm);
+        
+        console.log('📤 Sending request to:', '{% url "rag_system:upload" %}');
+        console.log('📋 FormData contents:');
+        for (let [key, value] of formData.entries()) {
+            console.log('  ', key, ':', value);
+        }
+        
+        fetch('{% url "rag_system:upload" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => {
+            console.log('📥 Response received:', response.status, response.statusText);
+            console.log('📋 Response headers:', response.headers);
+            return response.json();
+        })
+        .then(data => {
+            console.log('📄 Response data:', data);
+            modal.hide();
+            
+            if (data.success) {
+                console.log('✅ Upload successful');
+                // Show success message
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-success alert-dismissible fade show';
+                alert.innerHTML = `
+                    <i class="fas fa-check-circle me-2"></i>
+                    ${data.message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                document.querySelector('main').insertBefore(alert, document.querySelector('main').firstChild);
+                
+                // Reset form
+                uploadForm.reset();
+                fileInfo.style.display = 'none';
+            } else {
+                console.log('❌ Upload failed:', data.error);
+                // Show error message
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-danger alert-dismissible fade show';
+                alert.innerHTML = `
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    ${data.error || 'Upload failed. Please try again.'}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                document.querySelector('main').insertBefore(alert, document.querySelector('main').firstChild);
+            }
+        })
+        .catch(error => {
+            console.log('💥 Fetch error:', error);
+            modal.hide();
+            
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-danger alert-dismissible fade show';
+            alert.innerHTML = `
+                <i class="fas fa-exclamation-circle me-2"></i>
+                Upload failed. Please try again. Error: ${error.message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.querySelector('main').insertBefore(alert, document.querySelector('main').firstChild);
+        });
+    });
+});
+</script>
+{% endblock %} 
