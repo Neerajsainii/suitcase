@@ -20,15 +20,18 @@ class VectorStore:
         self.collection_name = collection_name
         self.client = None
         self.collection = None
+        print(f"🔧 VectorStore initializing with collection: {collection_name}")
         self._initialize_client()
     
     def _initialize_client(self):
         """Initialize ChromaDB client and collection"""
         try:
+            print(f"📁 Creating vector database directory: {settings.VECTOR_DB_PATH}")
             # Create vector database directory
             os.makedirs(settings.VECTOR_DB_PATH, exist_ok=True)
             
             # Initialize ChromaDB client
+            print("🔌 Initializing ChromaDB client...")
             self.client = chromadb.PersistentClient(
                 path=settings.VECTOR_DB_PATH,
                 settings=Settings(
@@ -36,19 +39,28 @@ class VectorStore:
                     allow_reset=True
                 )
             )
+            print("✅ ChromaDB client initialized")
             
             # Get or create collection
             try:
+                print(f"📂 Loading existing collection: {self.collection_name}")
                 self.collection = self.client.get_collection(self.collection_name)
-                logger.info(f"Loaded existing collection: {self.collection_name}")
+                print(f"✅ Loaded existing collection: {self.collection_name}")
+                
+                # Get collection info
+                count = self.collection.count()
+                print(f"📊 Collection contains {count} documents")
+                
             except:
+                print(f"🆕 Creating new collection: {self.collection_name}")
                 self.collection = self.client.create_collection(
                     name=self.collection_name,
                     metadata={"description": "Law cases vector store"}
                 )
-                logger.info(f"Created new collection: {self.collection_name}")
+                print(f"✅ Created new collection: {self.collection_name}")
                 
         except Exception as e:
+            print(f"❌ Failed to initialize vector store: {e}")
             logger.error(f"Error initializing vector store: {e}")
             raise
     
@@ -62,8 +74,12 @@ class VectorStore:
         Returns:
             List of chunk IDs
         """
+        print(f"💾 Starting to add {len(chunks)} chunks to vector store...")
+        start_time = time.time()
+        
         try:
             if not chunks:
+                print("⚠️ No chunks provided, returning empty IDs")
                 return []
             
             # Prepare data for ChromaDB
@@ -72,7 +88,9 @@ class VectorStore:
             embeddings = []
             metadatas = []
             
-            for chunk in chunks:
+            print("📋 Preparing chunk data for ChromaDB...")
+            
+            for i, chunk in enumerate(chunks):
                 # Generate unique ID
                 chunk_id = str(uuid.uuid4())
                 ids.append(chunk_id)
@@ -89,8 +107,22 @@ class VectorStore:
                 metadata = {k: v for k, v in chunk.items() 
                           if k not in ['text', 'embedding'] and v is not None}
                 metadatas.append(metadata)
+                
+                print(f"📦 Prepared chunk {i+1}: ID={chunk_id[:8]}..., text={len(text)} chars, embedding={len(embedding)} dims, metadata keys={list(metadata.keys())}")
+                
+                # Show actual chunk content
+                chunk_preview = text[:100]
+                if len(text) > 100:
+                    chunk_preview += "..."
+                print(f"   📄 Content: '{chunk_preview}'")
+                print(f"   📋 Metadata: {metadata}")
+                print()
+            
+            print(f"✅ Prepared {len(chunks)} chunks for storage")
+            print(f"📊 Data summary: {len(texts)} texts, {len(embeddings)} embeddings, {len(metadatas)} metadata objects")
             
             # Add to collection
+            print("💾 Adding chunks to ChromaDB collection...")
             self.collection.add(
                 ids=ids,
                 documents=texts,
@@ -98,10 +130,18 @@ class VectorStore:
                 metadatas=metadatas
             )
             
-            logger.info(f"Added {len(chunks)} chunks to vector store")
+            storage_time = time.time() - start_time
+            print(f"✅ Successfully added {len(chunks)} chunks to vector store in {storage_time:.3f}s")
+            
+            # Verify storage
+            new_count = self.collection.count()
+            print(f"📊 Vector store now contains {new_count} total documents")
+            
             return ids
             
         except Exception as e:
+            storage_time = time.time() - start_time
+            print(f"❌ Failed to add chunks after {storage_time:.3f}s: {e}")
             logger.error(f"Error adding chunks to vector store: {e}")
             return []
     
@@ -123,12 +163,21 @@ class VectorStore:
         start_time = time.time()
         
         try:
+            # Prepare query parameters
+            query_params = {
+                'query_embeddings': [query_embedding],
+                'n_results': n_results
+            }
+            
+            # Only add where clause if filter_metadata is not empty
+            if filter_metadata and len(filter_metadata) > 0:
+                print(f"🔍 Applying filter: {filter_metadata}")
+                query_params['where'] = filter_metadata
+            else:
+                print(f"🔍 No filter applied (empty or None filter_metadata)")
+            
             # Perform search
-            results = self.collection.query(
-                query_embeddings=[query_embedding],
-                n_results=n_results,
-                where=filter_metadata
-            )
+            results = self.collection.query(**query_params)
             
             search_time = time.time() - start_time
             print(f"✅ Vector search completed in {search_time:.3f}s")
@@ -169,12 +218,18 @@ class VectorStore:
             List of similar chunks with metadata
         """
         try:
+            # Prepare query parameters
+            query_params = {
+                'query_texts': [query_text],
+                'n_results': n_results
+            }
+            
+            # Only add where clause if filter_metadata is not empty
+            if filter_metadata and len(filter_metadata) > 0:
+                query_params['where'] = filter_metadata
+            
             # Perform search by text
-            results = self.collection.query(
-                query_texts=[query_text],
-                n_results=n_results,
-                where=filter_metadata
-            )
+            results = self.collection.query(**query_params)
             
             # Format results
             formatted_results = []

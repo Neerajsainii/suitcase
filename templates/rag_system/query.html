@@ -142,6 +142,9 @@ document.addEventListener('DOMContentLoaded', function() {
             requestData.filter_metadata.document_id = filterDocument;
         }
 
+        console.log('🔍 Frontend Debug - Request Data:', requestData);
+        console.log('🔍 Frontend Debug - URL:', '{% url "rag_system:query_api" %}');
+
         // Send query
         fetch('{% url "rag_system:query_api" %}', {
             method: 'POST',
@@ -151,11 +154,17 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             body: JSON.stringify(requestData)
         })
-        .then(response => response.json())
+        .then(response => {
+            console.log('🔍 Frontend Debug - Response status:', response.status);
+            console.log('🔍 Frontend Debug - Response headers:', response.headers);
+            return response.json();
+        })
         .then(data => {
+            console.log('🔍 Frontend Debug - Response data:', data);
             modal.hide();
             
             if (data.error) {
+                console.log('🔍 Frontend Debug - Error in response:', data.error);
                 // Show error
                 const alert = document.createElement('div');
                 alert.className = 'alert alert-danger alert-dismissible fade show';
@@ -168,18 +177,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
+            console.log('🔍 Frontend Debug - Displaying results, total results:', data.total_results);
             // Display results
             displayResults(data);
         })
         .catch(error => {
+            console.error('🔍 Frontend Debug - Fetch error:', error);
             modal.hide();
-            console.error('Error:', error);
             
             const alert = document.createElement('div');
             alert.className = 'alert alert-danger alert-dismissible fade show';
             alert.innerHTML = `
                 <i class="fas fa-exclamation-circle me-2"></i>
-                Search failed. Please try again.
+                Search failed. Please try again. Error: ${error.message}
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             `;
             document.querySelector('main').insertBefore(alert, document.querySelector('main').firstChild);
@@ -187,15 +197,24 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function displayResults(data) {
-        const results = data.results || [];
+        console.log('🔍 Frontend Debug - displayResults called with data:', data);
+        
+        // Extract results from the nested data structure
+        const resultData = data.data || data;
+        const results = resultData.results || [];
+        
+        console.log('🔍 Frontend Debug - Result data:', resultData);
+        console.log('🔍 Frontend Debug - Results array:', results);
+        console.log('🔍 Frontend Debug - Results length:', results.length);
         
         // Update stats
-        resultStats.textContent = `${results.length} results found in ${data.total_time?.toFixed(2) || 0}s`;
+        resultStats.textContent = `${results.length} results found in ${resultData.total_time?.toFixed(2) || 0}s`;
         
         // Clear previous results
         resultsContainer.innerHTML = '';
         
         if (results.length === 0) {
+            console.log('🔍 Frontend Debug - No results found, showing no results message');
             resultsContainer.innerHTML = `
                 <div class="text-center py-4">
                     <i class="fas fa-search fa-3x text-muted mb-3"></i>
@@ -204,8 +223,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             `;
         } else {
+            console.log('🔍 Frontend Debug - Displaying', results.length, 'results');
             // Display each result
             results.forEach((result, index) => {
+                console.log('🔍 Frontend Debug - Processing result', index + 1, ':', result);
                 const resultCard = document.createElement('div');
                 resultCard.className = 'result-card card mb-3';
                 
@@ -257,6 +278,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Show results section
         resultsSection.style.display = 'block';
+        console.log('🔍 Frontend Debug - Results section displayed');
         
         // Scroll to results
         resultsSection.scrollIntoView({ behavior: 'smooth' });

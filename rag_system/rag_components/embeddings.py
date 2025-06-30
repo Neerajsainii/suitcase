@@ -16,14 +16,21 @@ class EmbeddingGenerator:
     def __init__(self, model_name: str = None):
         self.model_name = model_name or settings.EMBEDDING_MODEL_NAME
         self.model = None
+        print(f"🔧 EmbeddingGenerator initializing with model: {self.model_name}")
         self._load_model()
     
     def _load_model(self):
         """Load the sentence transformer model"""
         try:
+            print(f"📥 Loading embedding model: {self.model_name}")
+            start_time = time.time()
             self.model = SentenceTransformer(self.model_name)
+            load_time = time.time() - start_time
+            print(f"✅ Model loaded successfully in {load_time:.3f}s")
+            print(f"📊 Model info: {self.get_model_info()}")
             logger.info(f"Loaded embedding model: {self.model_name}")
         except Exception as e:
+            print(f"❌ Failed to load model: {e}")
             logger.error(f"Error loading embedding model {self.model_name}: {e}")
             raise
     
@@ -37,20 +44,41 @@ class EmbeddingGenerator:
         Returns:
             List of embedding vectors
         """
+        print(f"🧠 Generating embeddings for {len(texts)} texts...")
+        start_time = time.time()
+        
         try:
             if not texts:
+                print("⚠️ No texts provided, returning empty embeddings")
                 return []
             
             # Generate embeddings
+            print(f"⚡ Processing {len(texts)} texts through model...")
             embeddings = self.model.encode(texts, convert_to_tensor=False)
             
             # Convert to list of lists
             if isinstance(embeddings, np.ndarray):
                 embeddings = embeddings.tolist()
             
+            generation_time = time.time() - start_time
+            print(f"✅ Generated {len(embeddings)} embeddings in {generation_time:.3f}s")
+            
+            # Print embedding details
+            if embeddings:
+                embedding_dim = len(embeddings[0])
+                print(f"📊 Embedding dimension: {embedding_dim}")
+                print(f"📈 Average embedding norm: {np.mean([np.linalg.norm(emb) for emb in embeddings]):.4f}")
+                
+                # Show sample embedding vector (first 10 values)
+                if embeddings:
+                    sample_embedding = embeddings[0][:10]
+                    print(f"🧠 Sample embedding (first 10 values): {[f'{x:.4f}' for x in sample_embedding]}")
+            
             return embeddings
             
         except Exception as e:
+            generation_time = time.time() - start_time
+            print(f"❌ Embedding generation failed after {generation_time:.3f}s: {e}")
             logger.error(f"Error generating embeddings: {e}")
             return []
     
@@ -71,7 +99,11 @@ class EmbeddingGenerator:
         embedding = embeddings[0] if embeddings else []
         
         generation_time = time.time() - start_time
-        print(f"✅ Embedding generated in {generation_time:.3f}s")
+        print(f"✅ Single embedding generated in {generation_time:.3f}s")
+        
+        if embedding:
+            print(f"📊 Embedding dimension: {len(embedding)}")
+            print(f"📈 Embedding norm: {np.linalg.norm(embedding):.4f}")
         
         return embedding
     
@@ -85,25 +117,57 @@ class EmbeddingGenerator:
         Returns:
             List of chunk dictionaries with added 'embedding' field
         """
+        print(f"🧠 Starting chunk embedding generation for {len(chunks)} chunks...")
+        start_time = time.time()
+        
         try:
             # Extract texts from chunks
             texts = [chunk.get('text', '') for chunk in chunks]
+            print(f"📝 Extracted {len(texts)} texts from chunks")
+            
+            # Check for empty texts
+            empty_texts = sum(1 for text in texts if not text.strip())
+            if empty_texts > 0:
+                print(f"⚠️ Found {empty_texts} chunks with empty text")
             
             # Generate embeddings
+            print("⚡ Generating embeddings...")
             embeddings = self.generate_embeddings(texts)
             
             # Add embeddings to chunks
+            print("🔗 Adding embeddings to chunks...")
+            successful_embeddings = 0
+            
             for i, chunk in enumerate(chunks):
                 if i < len(embeddings):
                     chunk['embedding'] = embeddings[i]
                     chunk['embedding_dim'] = len(embeddings[i])
+                    successful_embeddings += 1
+                    print(f"✅ Chunk {i+1}: Added {len(embeddings[i])}-dim embedding")
+                    
+                    # Show chunk text and sample embedding
+                    chunk_text = chunk.get('text', '')[:100]
+                    if len(chunk.get('text', '')) > 100:
+                        chunk_text += "..."
+                    print(f"   📄 Text: '{chunk_text}'")
+                    
+                    # Show first 5 embedding values
+                    sample_emb = embeddings[i][:5]
+                    print(f"   🧠 Embedding sample: {[f'{x:.4f}' for x in sample_emb]}...")
                 else:
                     chunk['embedding'] = []
                     chunk['embedding_dim'] = 0
+                    print(f"❌ Chunk {i+1}: No embedding available")
+            
+            total_time = time.time() - start_time
+            print(f"✅ Chunk embedding generation completed in {total_time:.3f}s")
+            print(f"📊 Summary: {successful_embeddings}/{len(chunks)} chunks successfully embedded")
             
             return chunks
             
         except Exception as e:
+            total_time = time.time() - start_time
+            print(f"❌ Chunk embedding generation failed after {total_time:.3f}s: {e}")
             logger.error(f"Error generating chunk embeddings: {e}")
             return chunks
     

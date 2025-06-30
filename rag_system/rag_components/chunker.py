@@ -5,6 +5,7 @@ import re
 from typing import List, Dict, Any
 from django.conf import settings
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,7 @@ class DocumentChunker:
     def __init__(self, chunk_size: int = None, chunk_overlap: int = None):
         self.chunk_size = chunk_size or settings.CHUNK_SIZE
         self.chunk_overlap = chunk_overlap or settings.CHUNK_OVERLAP
+        print(f"🔧 DocumentChunker initialized - Chunk size: {self.chunk_size}, Overlap: {self.chunk_overlap}")
     
     def chunk_text(self, text: str, metadata: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """
@@ -26,18 +28,30 @@ class DocumentChunker:
         Returns:
             List of chunk dictionaries with text and metadata
         """
+        print(f"✂️ Starting text chunking process...")
+        start_time = time.time()
+        print(f"📊 Input text length: {len(text)} characters")
+        print(f"📋 Metadata: {metadata}")
+        
         if not text.strip():
+            print("⚠️ Empty text provided, returning empty chunks")
             return []
         
         # Clean and normalize text
+        print("🧹 Cleaning and normalizing text...")
         text = self._clean_text(text)
+        print(f"✅ Text cleaned, new length: {len(text)} characters")
         
         # Split text into sentences first
+        print("🔤 Splitting text into sentences...")
         sentences = self._split_into_sentences(text)
+        print(f"✅ Split into {len(sentences)} sentences")
         
         chunks = []
         current_chunk = ""
         chunk_start = 0
+        
+        print(f"🔀 Processing sentences with chunk size: {self.chunk_size}")
         
         for i, sentence in enumerate(sentences):
             # Check if adding this sentence would exceed chunk size
@@ -57,11 +71,13 @@ class DocumentChunker:
                     chunk_data.update(metadata)
                 
                 chunks.append(chunk_data)
+                print(f"📦 Created chunk {len(chunks)}: {len(current_chunk.strip())} characters, sentences {chunk_start}-{i-1}")
                 
                 # Start new chunk with overlap
                 overlap_text = self._get_overlap_text(current_chunk)
                 current_chunk = overlap_text + sentence
                 chunk_start = i - len(overlap_text.split('.')) if overlap_text else i
+                print(f"🔄 Starting new chunk with {len(overlap_text)} characters overlap")
             else:
                 current_chunk += sentence
         
@@ -80,6 +96,27 @@ class DocumentChunker:
                 chunk_data.update(metadata)
             
             chunks.append(chunk_data)
+            print(f"📦 Created final chunk {len(chunks)}: {len(current_chunk.strip())} characters, sentences {chunk_start}-{len(sentences)-1}")
+        
+        chunking_time = time.time() - start_time
+        total_chunk_text = sum(len(chunk['text']) for chunk in chunks)
+        print(f"✅ Chunking completed in {chunking_time:.3f}s")
+        print(f"📊 Summary: {len(chunks)} chunks created, {total_chunk_text} total characters")
+        
+        # Print chunk details
+        for i, chunk in enumerate(chunks):
+            print(f"  Chunk {i+1}: {len(chunk['text'])} chars, metadata keys: {list(chunk.keys())}")
+            
+            # Show actual chunk content
+            chunk_text = chunk['text']
+            if len(chunk_text) > 150:
+                chunk_text = chunk_text[:150] + "..."
+            print(f"    📄 Content: '{chunk_text}'")
+            
+            # Show metadata
+            metadata = {k: v for k, v in chunk.items() if k != 'text'}
+            print(f"    📋 Metadata: {metadata}")
+            print()
         
         return chunks
     

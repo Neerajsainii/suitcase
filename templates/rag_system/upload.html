@@ -11,6 +11,7 @@
                     <i class="fas fa-upload me-2"></i>
                     Upload Legal Documents
                 </h4>
+                <small class="text-muted">Upload single or multiple PDF files at once</small>
             </div>
             <div class="card-body">
                 <form method="post" enctype="multipart/form-data" id="uploadForm">
@@ -18,8 +19,8 @@
                     
                     <div class="mb-4">
                         <label for="title" class="form-label">Document Title (Optional)</label>
-                        <input type="text" class="form-control" id="title" name="title" placeholder="Enter a title for the document">
-                        <div class="form-text">If not provided, the filename will be used as the title.</div>
+                        <input type="text" class="form-control" id="title" name="title" placeholder="Enter a title for the documents">
+                        <div class="form-text">If not provided, filenames will be used as titles.</div>
                     </div>
 
                     <div class="upload-area" id="uploadArea">
@@ -28,34 +29,28 @@
                         </div>
                         <h5>Drag & Drop PDF files here</h5>
                         <p class="text-muted">or</p>
-                        <input type="file" class="form-control" id="file" name="file" accept=".pdf" style="display: none;" required>
-                        <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('file').click()">
-                            <i class="fas fa-folder-open me-2"></i>Choose File
+                        <input type="file" class="form-control" id="files" name="files" accept=".pdf" multiple style="display: none;" required>
+                        <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('files').click()">
+                            <i class="fas fa-folder-open me-2"></i>Choose Files
                         </button>
                         <div class="mt-3">
                             <small class="text-muted">
                                 <i class="fas fa-info-circle me-1"></i>
-                                Only PDF files are supported. Maximum file size: 50MB
+                                Only PDF files are supported. Maximum file size: 50MB per file
                             </small>
                         </div>
                     </div>
 
-                    <div id="fileInfo" class="mt-3" style="display: none;">
+                    <div id="filesInfo" class="mt-3" style="display: none;">
                         <div class="alert alert-info">
-                            <div class="d-flex align-items-center">
-                                <i class="fas fa-file-pdf me-2"></i>
-                                <div>
-                                    <strong id="fileName"></strong>
-                                    <br>
-                                    <small id="fileSize" class="text-muted"></small>
-                                </div>
-                            </div>
+                            <h6><i class="fas fa-files-o me-2"></i>Selected Files</h6>
+                            <div id="filesList"></div>
                         </div>
                     </div>
 
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                         <button type="submit" class="btn btn-primary" id="uploadBtn">
-                            <i class="fas fa-upload me-2"></i>Upload Document
+                            <i class="fas fa-upload me-2"></i>Upload Documents
                         </button>
                     </div>
                 </form>
@@ -66,22 +61,54 @@
 
 <!-- Upload Progress Modal -->
 <div class="modal fade" id="uploadModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
                     <i class="fas fa-spinner fa-spin me-2"></i>
-                    Processing Document
+                    Processing Documents
                 </h5>
             </div>
             <div class="modal-body">
-                <div class="text-center">
-                    <div class="spinner-border text-primary mb-3" role="status">
+                <div class="text-center mb-3">
+                    <div class="spinner-border text-primary mb-2" role="status">
                         <span class="visually-hidden">Loading...</span>
                     </div>
-                    <p class="mb-0">Please wait while we process your document...</p>
-                    <small class="text-muted">This may take a few minutes for large documents.</small>
+                    <p class="mb-0">Please wait while we process your documents...</p>
+                    <small class="text-muted">This may take several minutes for multiple documents.</small>
                 </div>
+                
+                <div id="uploadProgress" style="display: none;">
+                    <div class="progress mb-3">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 0%" id="progressBar">0%</div>
+                    </div>
+                    <div id="progressText" class="text-center">
+                        <small class="text-muted">Processing...</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Results Modal -->
+<div class="modal fade" id="resultsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-check-circle me-2"></i>
+                    Upload Results
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="uploadResults"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="{% url 'rag_system:documents' %}" class="btn btn-primary">View Documents</a>
             </div>
         </div>
     </div>
@@ -96,27 +123,19 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('📄 DOM loaded, setting up upload form');
     
     const uploadArea = document.getElementById('uploadArea');
-    const fileInput = document.getElementById('file');
-    const fileInfo = document.getElementById('fileInfo');
-    const fileName = document.getElementById('fileName');
-    const fileSize = document.getElementById('fileSize');
+    const fileInput = document.getElementById('files');
+    const filesInfo = document.getElementById('filesInfo');
+    const filesList = document.getElementById('filesList');
     const uploadForm = document.getElementById('uploadForm');
     const uploadBtn = document.getElementById('uploadBtn');
 
     console.log('🔍 Elements found:', {
         uploadArea: !!uploadArea,
         fileInput: !!fileInput,
-        fileInfo: !!fileInfo,
-        fileName: !!fileName,
-        fileSize: !!fileSize,
+        filesInfo: !!filesInfo,
+        filesList: !!filesList,
         uploadForm: !!uploadForm,
         uploadBtn: !!uploadBtn
-    });
-
-    // Test upload button click
-    uploadBtn.addEventListener('click', function(e) {
-        console.log('🖱️ Upload button clicked');
-        console.log('📁 Files in input:', fileInput.files.length);
     });
 
     // Drag and drop functionality
@@ -137,7 +156,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const files = e.dataTransfer.files;
         if (files.length > 0) {
             fileInput.files = files;
-            handleFileSelect();
+            handleFilesSelect();
         }
     });
 
@@ -146,53 +165,98 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('📁 File input change event triggered');
         console.log('📋 Event:', e);
         console.log('📁 Files:', fileInput.files);
-        handleFileSelect();
+        handleFilesSelect();
     });
 
-    function handleFileSelect() {
-        console.log('🔍 handleFileSelect called');
-        const file = fileInput.files[0];
-        console.log('📁 File object:', file);
+    function handleFilesSelect() {
+        console.log('🔍 handleFilesSelect called');
+        const files = Array.from(fileInput.files);
+        console.log('📁 Files array:', files);
         
-        if (file) {
-            console.log('✅ File found:', file.name, 'Size:', file.size, 'Type:', file.type);
+        if (files.length > 0) {
+            console.log('✅ Files found:', files.length);
             
-            // Validate file type
-            if (file.type !== 'application/pdf') {
-                console.log('❌ Invalid file type:', file.type);
-                alert('Please select a PDF file.');
-                fileInput.value = '';
-                return;
-            }
-
-            // Validate file size (50MB)
-            if (file.size > 50 * 1024 * 1024) {
-                console.log('❌ File too large:', file.size);
-                alert('File size must be less than 50MB.');
-                fileInput.value = '';
-                return;
-            }
-
-            console.log('✅ File validation passed');
-            // Show file info
-            fileName.textContent = file.name;
-            fileSize.textContent = formatFileSize(file.size);
-            fileInfo.style.display = 'block';
-            console.log('✅ File info displayed');
+            // Validate files
+            const validFiles = [];
+            const invalidFiles = [];
             
-            // Monitor if file gets cleared
-            setTimeout(() => {
-                console.log('⏰ Checking file after 1 second:', fileInput.files.length, 'files');
-                if (fileInput.files.length === 0) {
-                    console.log('❌ File was cleared!');
-                } else {
-                    console.log('✅ File still present');
+            files.forEach(file => {
+                console.log('📄 Validating file:', file.name, 'Size:', file.size, 'Type:', file.type);
+                
+                // Validate file type
+                if (file.type !== 'application/pdf') {
+                    console.log('❌ Invalid file type:', file.type);
+                    invalidFiles.push({
+                        name: file.name,
+                        error: 'Not a PDF file'
+                    });
+                    return;
                 }
-            }, 1000);
+
+                // Validate file size (50MB)
+                if (file.size > 50 * 1024 * 1024) {
+                    console.log('❌ File too large:', file.size);
+                    invalidFiles.push({
+                        name: file.name,
+                        error: 'File size exceeds 50MB'
+                    });
+                    return;
+                }
+
+                console.log('✅ File validation passed:', file.name);
+                validFiles.push(file);
+            });
+
+            if (invalidFiles.length > 0) {
+                console.log('⚠️ Invalid files found:', invalidFiles);
+                alert(`Some files were invalid:\n${invalidFiles.map(f => `- ${f.name}: ${f.error}`).join('\n')}`);
+            }
+
+            if (validFiles.length > 0) {
+                console.log('✅ Valid files:', validFiles.length);
+                displayFilesInfo(validFiles);
+            } else {
+                console.log('❌ No valid files');
+                filesInfo.style.display = 'none';
+            }
             
         } else {
-            console.log('❌ No file found in input');
+            console.log('❌ No files found in input');
+            filesInfo.style.display = 'none';
         }
+    }
+
+    function displayFilesInfo(files) {
+        console.log('📋 Displaying files info for', files.length, 'files');
+        
+        let html = '';
+        let totalSize = 0;
+        
+        files.forEach((file, index) => {
+            totalSize += file.size;
+            html += `
+                <div class="d-flex align-items-center mb-2">
+                    <i class="fas fa-file-pdf me-2 text-danger"></i>
+                    <div class="flex-grow-1">
+                        <strong>${file.name}</strong>
+                        <br>
+                        <small class="text-muted">${formatFileSize(file.size)}</small>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `
+            <hr>
+            <div class="d-flex justify-content-between">
+                <strong>Total: ${files.length} file(s)</strong>
+                <strong>${formatFileSize(totalSize)}</strong>
+            </div>
+        `;
+        
+        filesList.innerHTML = html;
+        filesInfo.style.display = 'block';
+        console.log('✅ Files info displayed');
     }
 
     function formatFileSize(bytes) {
@@ -207,89 +271,172 @@ document.addEventListener('DOMContentLoaded', function() {
     uploadForm.addEventListener('submit', function(e) {
         e.preventDefault();
         
-        alert('Form submitted! Check console for debug info.');
         console.log('🚀 Upload form submitted');
         
-        const file = fileInput.files[0];
-        if (!file) {
-            console.log('❌ No file selected');
-            alert('Please select a file to upload.');
+        const files = Array.from(fileInput.files);
+        if (files.length === 0) {
+            console.log('❌ No files selected');
+            alert('Please select at least one file to upload.');
             return;
         }
 
-        console.log('📁 File selected:', file.name, 'Size:', file.size, 'Type:', file.type);
+        console.log('📁 Files to upload:', files.length);
+        files.forEach(file => {
+            console.log('  -', file.name, 'Size:', file.size, 'Type:', file.type);
+        });
 
         // Show progress modal
         const modal = new bootstrap.Modal(document.getElementById('uploadModal'));
         modal.show();
-
-        // Submit form
-        const formData = new FormData(uploadForm);
         
-        console.log('📤 Sending request to:', '{% url "rag_system:upload" %}');
-        console.log('📋 FormData contents:');
-        for (let [key, value] of formData.entries()) {
-            console.log('  ', key, ':', value);
+        // Show progress section
+        document.getElementById('uploadProgress').style.display = 'block';
+        document.getElementById('progressText').innerHTML = `<small class="text-muted">Uploading ${files.length} file(s)...</small>`;
+
+        // Create FormData
+        const formData = new FormData();
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        
+        const title = document.getElementById('title').value;
+        if (title) {
+            formData.append('title', title);
         }
         
-        fetch('{% url "rag_system:upload" %}', {
+        files.forEach(file => {
+            formData.append('files', file);
+        });
+
+        // Upload files
+        fetch('', {
             method: 'POST',
-            body: formData,
-            headers: {
-                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-            }
+            body: formData
         })
-        .then(response => {
-            console.log('📥 Response received:', response.status, response.statusText);
-            console.log('📋 Response headers:', response.headers);
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
-            console.log('📄 Response data:', data);
+            console.log('📊 Upload response:', data);
+            
+            // Hide progress modal
             modal.hide();
             
-            if (data.success) {
-                console.log('✅ Upload successful');
-                // Show success message
-                const alert = document.createElement('div');
-                alert.className = 'alert alert-success alert-dismissible fade show';
-                alert.innerHTML = `
-                    <i class="fas fa-check-circle me-2"></i>
-                    ${data.message}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                `;
-                document.querySelector('main').insertBefore(alert, document.querySelector('main').firstChild);
-                
-                // Reset form
-                uploadForm.reset();
-                fileInfo.style.display = 'none';
-            } else {
-                console.log('❌ Upload failed:', data.error);
-                // Show error message
-                const alert = document.createElement('div');
-                alert.className = 'alert alert-danger alert-dismissible fade show';
-                alert.innerHTML = `
-                    <i class="fas fa-exclamation-circle me-2"></i>
-                    ${data.error || 'Upload failed. Please try again.'}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                `;
-                document.querySelector('main').insertBefore(alert, document.querySelector('main').firstChild);
-            }
+            // Show results
+            showUploadResults(data);
         })
         .catch(error => {
-            console.log('💥 Fetch error:', error);
+            console.error('❌ Upload error:', error);
             modal.hide();
-            
-            const alert = document.createElement('div');
-            alert.className = 'alert alert-danger alert-dismissible fade show';
-            alert.innerHTML = `
-                <i class="fas fa-exclamation-circle me-2"></i>
-                Upload failed. Please try again. Error: ${error.message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            document.querySelector('main').insertBefore(alert, document.querySelector('main').firstChild);
+            alert('Upload failed: ' + error.message);
         });
     });
+
+    function showUploadResults(data) {
+        console.log('📋 Showing upload results:', data);
+        
+        let html = '';
+        
+        if (data.success) {
+            html += `
+                <div class="alert alert-success">
+                    <h6><i class="fas fa-check-circle me-2"></i>Upload Successful</h6>
+                    <p class="mb-0">${data.message}</p>
+                </div>
+            `;
+            
+            if (data.uploaded_files && data.uploaded_files.length > 0) {
+                html += `
+                    <h6><i class="fas fa-file-pdf me-2"></i>Successfully Uploaded (${data.uploaded_files.length})</h6>
+                    <div class="list-group mb-3">
+                `;
+                
+                data.uploaded_files.forEach(file => {
+                    html += `
+                        <div class="list-group-item list-group-item-success">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-file-pdf me-2 text-success"></i>
+                                <div class="flex-grow-1">
+                                    <strong>${file.name}</strong>
+                                    <br>
+                                    <small class="text-muted">ID: ${file.id} | ${formatFileSize(file.size)}</small>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += '</div>';
+            }
+            
+            if (data.failed_files && data.failed_files.length > 0) {
+                html += `
+                    <h6><i class="fas fa-exclamation-triangle me-2"></i>Failed Uploads (${data.failed_files.length})</h6>
+                    <div class="list-group">
+                `;
+                
+                data.failed_files.forEach(file => {
+                    html += `
+                        <div class="list-group-item list-group-item-danger">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-file-pdf me-2 text-danger"></i>
+                                <div class="flex-grow-1">
+                                    <strong>${file.name}</strong>
+                                    <br>
+                                    <small class="text-danger">${file.error}</small>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += '</div>';
+            }
+        } else {
+            html += `
+                <div class="alert alert-danger">
+                    <h6><i class="fas fa-exclamation-circle me-2"></i>Upload Failed</h6>
+                    <p class="mb-0">${data.error}</p>
+                </div>
+            `;
+        }
+        
+        document.getElementById('uploadResults').innerHTML = html;
+        
+        // Show results modal
+        const resultsModal = new bootstrap.Modal(document.getElementById('resultsModal'));
+        resultsModal.show();
+    }
 });
 </script>
+
+<style>
+.upload-area {
+    border: 2px dashed #dee2e6;
+    border-radius: 8px;
+    padding: 2rem;
+    text-align: center;
+    transition: all 0.3s ease;
+    background-color: #f8f9fa;
+}
+
+.upload-area:hover {
+    border-color: #007bff;
+    background-color: #e3f2fd;
+}
+
+.upload-area.dragover {
+    border-color: #007bff;
+    background-color: #e3f2fd;
+    transform: scale(1.02);
+}
+
+.list-group-item {
+    border-left: 4px solid transparent;
+}
+
+.list-group-item-success {
+    border-left-color: #28a745;
+}
+
+.list-group-item-danger {
+    border-left-color: #dc3545;
+}
+</style>
 {% endblock %} 
